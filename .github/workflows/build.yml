@@ -17,45 +17,34 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # AGP 9.1.1 চালানোর জন্য Java 21 আবশ্যক
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      # Android SDK ও লাইসেন্স সেটআপ
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # অফিসিয়াল Gradle ক্যাশিং অ্যাকশন
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # Gradlew পারমিশন ও লাইন এন্ডিং ঠিক করা
       - name: Prepare Gradle Wrapper
         run: |
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
 
-      # Keystore রিস্টোর বা অটোমেটিক জেনারেট
       - name: Prepare Debug Keystore
         run: |
           if [ -f "debug.keystore.base64" ]; then
             base64 -d debug.keystore.base64 > debug.keystore
           elif [ ! -f "debug.keystore" ]; then
-            keytool -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+            keytool -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA
           fi
 
-      # ইউনিট টেস্ট সম্পন্ন করা
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 
-      # Debug APK বিল্ড করা
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # তৈরি হওয়া APK ফাইলটি আর্টফ্যাক্ট হিসেবে আপলোড করা
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
