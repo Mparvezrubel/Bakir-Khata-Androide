@@ -1,0 +1,6 @@
+{
+  "name": "বাকির খাতা",
+  "description": "বাকি ও দেনা-পাওনা হিসাব রাখার সহজ ও নির্ভরযোগ্য ডিজিটাল খাতা। অফলাইন ব্যাকআপ এবং এসএমএস রিমাইন্ডার সুবিধা।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
