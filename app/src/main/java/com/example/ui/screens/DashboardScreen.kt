@@ -1,6 +1,10 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,14 +30,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Message
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,27 +62,40 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.R
 import com.example.data.model.CustomerType
 import com.example.data.model.CustomerWithBalance
 import com.example.ui.BakirKhataViewModel
 import com.example.ui.FilterType
 import com.example.ui.dialogs.AddCustomerDialog
 import com.example.ui.dialogs.SmsReminderDialog
+import com.example.ui.theme.KhataCardBorder
 import com.example.ui.theme.KhataPayableBg
+import com.example.ui.theme.KhataPayableBorder
 import com.example.ui.theme.KhataPayableRed
 import com.example.ui.theme.KhataPrimary
+import com.example.ui.theme.KhataPrimaryGradientEnd
+import com.example.ui.theme.KhataPrimaryGradientStart
 import com.example.ui.theme.KhataReceivableBg
+import com.example.ui.theme.KhataReceivableBorder
 import com.example.ui.theme.KhataReceivableGreen
 import com.example.ui.theme.KhataSettledBg
+import com.example.ui.theme.KhataSettledBorder
 import com.example.ui.theme.KhataSettledGray
+import com.example.ui.theme.KhataTextPrimary
+import com.example.ui.theme.KhataTextSecondary
 import com.example.util.Formatters
 import com.example.util.ReminderHelper
 
@@ -102,40 +119,64 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = viewModel.shopPrefs.shopName.ifBlank { "বাকির খাতা" },
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 19.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.CloudDone,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Storefront,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
                             Text(
-                                text = "অফলাইন সংরক্ষিত • ডিজিটাল খাতা",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                                text = viewModel.shopPrefs.shopName.ifBlank { "বাকির খাতা" },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = Color.White
                             )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(Color(0xFF4ADE80), CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "ডিজিটাল লেজার • ১০০% অফলাইন",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                            }
                         }
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.testTag("settings_button")
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.15f),
+                        modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "ব্যাকআপ ও সেটিংস",
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                        IconButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.testTag("settings_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "ব্যাকআপ ও সেটিংস",
+                                tint = Color.White
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -147,10 +188,12 @@ fun DashboardScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showAddCustomerDialog = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("নতুন কাস্টমার", fontWeight = FontWeight.SemiBold) },
+                icon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                text = { Text("নতুন কাস্টমার", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
                 containerColor = KhataPrimary,
                 contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                elevation = androidx.compose.material3.FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp),
                 modifier = Modifier.testTag("add_customer_fab")
             )
         }
@@ -161,7 +204,7 @@ fun DashboardScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Dashboard Summary Cards
+            // Dashboard Summary Hero Card
             DashboardHeader(
                 metrics = metrics,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -171,7 +214,7 @@ fun DashboardScreen(
             SearchBarSection(
                 query = searchQuery,
                 onQueryChange = { viewModel.onSearchQueryChange(it) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
             )
 
             // Filter Chips
@@ -191,8 +234,8 @@ fun DashboardScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 84.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(customers, key = { it.customer.id }) { item ->
                         CustomerCard(
@@ -233,12 +276,52 @@ fun DashboardHeader(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(4.dp, RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            // Header Title
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = KhataPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "মোট বাকি সারসংক্ষেপ",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = KhataTextSecondary
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = KhataPrimary.copy(alpha = 0.08f)
+                ) {
+                    Text(
+                        text = "${metrics.totalCustomers} জন ক্লায়েন্ট",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = KhataPrimary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Two-column Financial Cards
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -246,8 +329,9 @@ fun DashboardHeader(
                 // Total Receivable (পাবো)
                 Card(
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = KhataReceivableBg)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = KhataReceivableBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, KhataReceivableBorder)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -258,31 +342,35 @@ fun DashboardHeader(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Default.ArrowDownward,
+                                    imageVector = Icons.Default.ArrowDownward,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "আপনি পাবেন",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.Bold,
                                 color = KhataReceivableGreen
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = Formatters.formatTaka(metrics.totalReceivable),
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = KhataReceivableGreen
+                            fontWeight = FontWeight.ExtraBold,
+                            color = KhataReceivableGreen,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${metrics.receivableCount} জন গ্রাহক",
+                            text = "${metrics.receivableCount} জন গ্রাহকের কাছে",
                             fontSize = 11.sp,
-                            color = KhataReceivableGreen.copy(alpha = 0.8f)
+                            fontWeight = FontWeight.Medium,
+                            color = KhataReceivableGreen.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -290,8 +378,9 @@ fun DashboardHeader(
                 // Total Payable (দেবো)
                 Card(
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = KhataPayableBg)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = KhataPayableBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, KhataPayableBorder)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -302,31 +391,35 @@ fun DashboardHeader(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Default.ArrowUpward,
+                                    imageVector = Icons.Default.ArrowUpward,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "আপনি দেবেন",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.Bold,
                                 color = KhataPayableRed
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = Formatters.formatTaka(metrics.totalPayable),
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = KhataPayableRed
+                            fontWeight = FontWeight.ExtraBold,
+                            color = KhataPayableRed,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${metrics.payableCount} জন বাকিদার",
+                            text = "${metrics.payableCount} জন সাপ্লায়ারের কাছে",
                             fontSize = 11.sp,
-                            color = KhataPayableRed.copy(alpha = 0.8f)
+                            fontWeight = FontWeight.Medium,
+                            color = KhataPayableRed.copy(alpha = 0.85f)
                         )
                     }
                 }
@@ -334,40 +427,62 @@ fun DashboardHeader(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Net balance badge
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "নিট ব্যালেন্স:",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val net = metrics.netBalance
-                val netColor = if (net >= 0) KhataReceivableGreen else KhataPayableRed
-                val netLabel = if (net >= 0) "(পাওনা বাকি বেশি)" else "(দেনা বাকি বেশি)"
+            // Net balance strip
+            val net = metrics.netBalance
+            val isNetPositive = net >= 0
+            val netColor = if (isNetPositive) KhataReceivableGreen else KhataPayableRed
+            val netBg = if (isNetPositive) KhataReceivableBg else KhataPayableBg
+            val netStatus = if (isNetPositive) "পাওনা বেশি" else "দেনা বেশি"
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = Formatters.formatTaka(net),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = netColor
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = netLabel,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = netColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "নিট ব্যালেন্স স্থিতি:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = KhataTextSecondary
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = Formatters.formatTaka(net),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = netColor
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = netBg
+                        ) {
+                            Text(
+                                text = netStatus,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = netColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -383,21 +498,43 @@ fun SearchBarSection(
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("গ্রাহকের নাম বা ফোন নম্বর খুঁজুন...", fontSize = 14.sp) },
+        placeholder = {
+            Text(
+                "গ্রাহকের নাম বা ফোন নম্বর খুঁজুন...",
+                fontSize = 13.sp,
+                color = KhataTextSecondary.copy(alpha = 0.7f)
+            )
+        },
         leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = KhataPrimary,
+                modifier = Modifier.size(20.dp)
+            )
         },
         trailingIcon = {
-            AnimatedVisibility(visible = query.isNotEmpty()) {
+            AnimatedVisibility(
+                visible = query.isNotEmpty(),
+                enter = fadeIn(tween(150)),
+                exit = fadeOut(tween(150))
+            ) {
                 IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Clear",
+                        tint = KhataTextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            focusedContainerColor = MaterialTheme.colorScheme.surface
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedBorderColor = KhataCardBorder,
+            focusedBorderColor = KhataPrimary
         ),
         singleLine = true,
         modifier = modifier
@@ -428,13 +565,28 @@ fun FilterRow(
                 FilterType.SETTLED -> ""
                 FilterType.SUPPLIERS -> ""
             }
+            val isSelected = selectedFilter == filter
+
             FilterChip(
-                selected = selectedFilter == filter,
+                selected = isSelected,
                 onClick = { onFilterSelected(filter) },
-                label = { Text("${filter.titleBangla} $countText".trim(), fontSize = 12.sp) },
+                label = {
+                    Text(
+                        text = "${filter.titleBangla} $countText".trim(),
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                },
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = if (isSelected) KhataPrimary else KhataCardBorder
+                ),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = KhataPrimary,
-                    selectedLabelColor = Color.White
+                    selectedLabelColor = Color.White,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    labelColor = KhataTextPrimary
                 )
             )
         }
@@ -451,41 +603,43 @@ fun CustomerCard(
     val customer = item.customer
     val initial = customer.name.firstOrNull()?.toString() ?: "ক"
 
-    val avatarBg = when {
-        item.isReceivable -> KhataReceivableGreen
-        item.isPayable -> KhataPayableRed
-        else -> KhataSettledGray
+    val (avatarColor, badgeBg, badgeBorder, badgeText) = when {
+        item.isReceivable -> Quadruple(KhataReceivableGreen, KhataReceivableBg, KhataReceivableBorder, "পাবো")
+        item.isPayable -> Quadruple(KhataPayableRed, KhataPayableBg, KhataPayableBorder, "দেবো")
+        else -> Quadruple(KhataSettledGray, KhataSettledBg, KhataSettledBorder, "পরিশোধিত")
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .testTag("customer_card_${customer.id}"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar
+            // Modern Styled Avatar
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(46.dp)
                     .clip(CircleShape)
-                    .background(avatarBg.copy(alpha = 0.15f))
-                    .border(1.5.dp, avatarBg.copy(alpha = 0.5f), CircleShape),
+                    .background(avatarColor.copy(alpha = 0.12f))
+                    .border(1.5.dp, avatarColor.copy(alpha = 0.35f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = initial,
-                    color = avatarBg,
+                    color = avatarColor,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize = 19.sp
                 )
             }
 
@@ -498,6 +652,7 @@ fun CustomerCard(
                         text = customer.name,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
+                        color = KhataTextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -505,38 +660,42 @@ fun CustomerCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer
+                            color = KhataPrimary.copy(alpha = 0.1f)
                         ) {
                             Text(
                                 text = "পাইকার",
                                 fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                                color = KhataPrimary
                             )
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (customer.phone.isNotBlank()) {
                         Text(
                             text = customer.phone,
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.outline
+                            fontWeight = FontWeight.Medium,
+                            color = KhataTextSecondary
                         )
                     }
                     if (item.lastTransactionDate != null) {
                         if (customer.phone.isNotBlank()) {
                             Text(
                                 text = " • ",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.outline
+                                fontSize = 11.sp,
+                                color = KhataTextSecondary.copy(alpha = 0.6f)
                             )
                         }
                         Text(
                             text = Formatters.formatRelativeDateBangla(item.lastTransactionDate),
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.outline
+                            fontSize = 11.sp,
+                            color = KhataTextSecondary
                         )
                     }
                 }
@@ -544,64 +703,73 @@ fun CustomerCard(
 
             // Balance and Quick Actions
             Column(horizontalAlignment = Alignment.End) {
-                val balanceColor = when {
-                    item.isReceivable -> KhataReceivableGreen
-                    item.isPayable -> KhataPayableRed
-                    else -> KhataSettledGray
-                }
-
                 Text(
                     text = Formatters.formatTaka(item.displayAmount),
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     fontSize = 16.sp,
-                    color = balanceColor
+                    color = avatarColor
                 )
 
-                Text(
-                    text = item.statusTextBangla,
-                    fontSize = 11.sp,
-                    color = balanceColor.copy(alpha = 0.9f)
-                )
+                Spacer(modifier = Modifier.height(2.dp))
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = badgeBg,
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, badgeBorder)
+                ) {
+                    Text(
+                        text = badgeText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = avatarColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Action buttons: SMS & Call
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (customer.phone.isNotBlank()) {
-                        Box(
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable { onCallClick() },
-                            contentAlignment = Alignment.Center
+                                .clickable { onCallClick() }
                         ) {
-                            Icon(
-                                Icons.Default.Phone,
-                                contentDescription = "Call",
-                                modifier = Modifier.size(15.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = "Call",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = KhataPrimary
+                                )
+                            }
                         }
                     }
 
                     // SMS Reminder button (shows if customer owes money)
                     if (item.isReceivable && customer.phone.isNotBlank()) {
-                        Box(
+                        Surface(
+                            shape = CircleShape,
+                            color = KhataReceivableBg,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, KhataReceivableBorder),
                             modifier = Modifier
                                 .size(28.dp)
                                 .clip(CircleShape)
-                                .background(KhataReceivableBg)
                                 .clickable { onSmsClick() }
-                                .testTag("quick_sms_button_${customer.id}"),
-                            contentAlignment = Alignment.Center
+                                .testTag("quick_sms_button_${customer.id}")
                         ) {
-                            Icon(
-                                Icons.Default.Message,
-                                contentDescription = "SMS Reminder",
-                                modifier = Modifier.size(15.dp),
-                                tint = KhataReceivableGreen
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Message,
+                                    contentDescription = "SMS Reminder",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = KhataReceivableGreen
+                                )
+                            }
                         }
                     }
                 }
@@ -609,6 +777,8 @@ fun CustomerCard(
         }
     }
 }
+
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 @Composable
 fun EmptyStateView(
@@ -618,40 +788,78 @@ fun EmptyStateView(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = if (isSearch) Icons.Default.Search else Icons.Default.Person,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = if (isSearch) "কোনো তথ্য পাওয়া যায়নি" else "এখনো কোনো বাকি হিসাব যোগ করা হয়নি",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = if (isSearch) "অন্য নাম বা ফোন নম্বর লিখে অনুসন্ধান করুন" else "নতুন গ্রাহক যুক্ত করে বাকির হিসাব শুরু করুন",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.outline
-            )
             if (!isSearch) {
-                Spacer(modifier = Modifier.height(16.dp))
+                // Generated 3D Ledger Art
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
+                    modifier = Modifier.size(130.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_empty_ledger_1790791815560),
+                        contentDescription = "বাকির খাতা",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp),
+                        tint = KhataTextSecondary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = if (isSearch) "কোনো তথ্য পাওয়া যায়নি" else "আপনার খাতা সম্পূর্ণ খালি",
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                color = KhataTextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = if (isSearch)
+                    "অন্য কোনো নাম বা ফোন নম্বর লিখে খুঁজুন"
+                else
+                    "গ্রাহক বা সরবরাহকারী যুক্ত করে সহজে প্রতিদিনের বাকির হিসাব রাখুন",
+                fontSize = 13.sp,
+                color = KhataTextSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            if (!isSearch) {
+                Spacer(modifier = Modifier.height(20.dp))
                 ExtendedFloatingActionButton(
                     onClick = onAddClick,
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("প্রথম গ্রাহক যোগ করুন") },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    text = { Text("প্রথম কাস্টমার যোগ করুন", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
                     containerColor = KhataPrimary,
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(14.dp)
                 )
             }
         }

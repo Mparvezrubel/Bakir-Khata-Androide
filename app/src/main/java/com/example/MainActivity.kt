@@ -37,6 +37,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (viewModel.shopPrefs.isAutoBackupEnabled) {
+            com.example.util.AutoBackupScheduler.scheduleDailyBackup(
+                this,
+                wifiOnly = viewModel.shopPrefs.isBackupWifiOnly
+            )
+        }
+
         setContent {
             MyApplicationTheme {
                 Surface(

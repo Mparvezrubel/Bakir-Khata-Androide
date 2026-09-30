@@ -28,7 +28,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,11 +55,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,13 +71,20 @@ import com.example.data.model.TransactionType
 import com.example.ui.BakirKhataViewModel
 import com.example.ui.dialogs.AddTransactionDialog
 import com.example.ui.dialogs.SmsReminderDialog
+import com.example.ui.theme.KhataCardBorder
 import com.example.ui.theme.KhataPayableBg
+import com.example.ui.theme.KhataPayableBorder
 import com.example.ui.theme.KhataPayableRed
 import com.example.ui.theme.KhataPrimary
 import com.example.ui.theme.KhataReceivableBg
+import com.example.ui.theme.KhataReceivableBorder
 import com.example.ui.theme.KhataReceivableGreen
 import com.example.ui.theme.KhataSettledBg
+import com.example.ui.theme.KhataSettledBorder
 import com.example.ui.theme.KhataSettledGray
+import com.example.ui.theme.KhataTextPrimary
+import com.example.ui.theme.KhataTextSecondary
+import com.example.ui.theme.WhatsAppGreen
 import com.example.util.Formatters
 import com.example.util.ReminderHelper
 
@@ -117,13 +126,15 @@ fun CustomerDetailScreen(
                         Text(
                             text = customer.name,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            color = Color.White
                         )
                         Text(
                             text = if (isSupplier) "সাপ্লায়ার / পাইকার খাতা" else "কাস্টমার / ক্রেতা খাতা",
                             fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.85f)
                         )
                     }
@@ -164,7 +175,8 @@ fun CustomerDetailScreen(
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
-                shadowElevation = 8.dp
+                shadowElevation = 8.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder)
             ) {
                 Row(
                     modifier = Modifier
@@ -178,10 +190,11 @@ fun CustomerDetailScreen(
                             onClick = { showAddTxDialog = TransactionType.GAVE_CREDIT },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp)
+                                .height(52.dp)
                                 .testTag("btn_gave_credit"),
                             colors = ButtonDefaults.buttonColors(containerColor = KhataPayableRed),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
                         ) {
                             Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -193,10 +206,11 @@ fun CustomerDetailScreen(
                             onClick = { showAddTxDialog = TransactionType.GOT_PAYMENT },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp)
+                                .height(52.dp)
                                 .testTag("btn_got_payment"),
                             colors = ButtonDefaults.buttonColors(containerColor = KhataReceivableGreen),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
                         ) {
                             Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -208,10 +222,11 @@ fun CustomerDetailScreen(
                             onClick = { showAddTxDialog = TransactionType.TOOK_CREDIT },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp)
+                                .height(52.dp)
                                 .testTag("btn_took_credit"),
                             colors = ButtonDefaults.buttonColors(containerColor = KhataPayableRed),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
                         ) {
                             Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -223,10 +238,11 @@ fun CustomerDetailScreen(
                             onClick = { showAddTxDialog = TransactionType.GAVE_PAYMENT },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp)
+                                .height(52.dp)
                                 .testTag("btn_gave_payment"),
                             colors = ButtonDefaults.buttonColors(containerColor = KhataReceivableGreen),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(14.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
                         ) {
                             Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -247,6 +263,19 @@ fun CustomerDetailScreen(
             CustomerLedgerHeader(
                 item = item,
                 onSmsClick = { showSmsDialog = true },
+                onWhatsAppClick = {
+                    if (customer.phone.isNotBlank()) {
+                        val message = ReminderHelper.composeReminderMessage(
+                            template = viewModel.shopPrefs.smsReminderTemplate,
+                            customerName = customer.name,
+                            amount = item.displayAmount,
+                            shopName = viewModel.shopPrefs.shopName
+                        )
+                        ReminderHelper.openWhatsApp(context, customer.phone, message)
+                    } else {
+                        Toast.makeText(context, "ফোন নম্বর দেওয়া নেই", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onShareStatement = {
                     shareCustomerStatement(context, item, transactions, viewModel.shopPrefs.shopName)
                 }
@@ -256,19 +285,20 @@ fun CustomerDetailScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "লেনদেন বিবরণী (${transactions.size})",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 14.sp,
+                    color = KhataTextPrimary
                 )
                 Text(
-                    text = "তারিখ অনুযায়ী সাজানো",
+                    text = "তারিখ অনুযায়ী",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.outline
+                    color = KhataTextSecondary
                 )
             }
 
@@ -281,16 +311,32 @@ fun CustomerDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(60.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Receipt,
+                                    contentDescription = null,
+                                    tint = KhataTextSecondary,
+                                    modifier = Modifier.size(30.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = "কোনো লেনদেন এন্ট্রি নেই",
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.outline
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = KhataTextPrimary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "নিচের বোতামগুলো দিয়ে বাকির হিসাব শুরু করুন",
+                            text = "নিচের বোতামগুলো চেপে প্রথম লেনদেন যোগ করুন",
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.outline
+                            color = KhataTextSecondary
                         )
                     }
                 }
@@ -298,7 +344,7 @@ fun CustomerDetailScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(transactions, key = { it.id }) { tx ->
                         TransactionItemCard(
@@ -338,7 +384,7 @@ fun CustomerDetailScreen(
     if (showDeleteCustomerConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteCustomerConfirm = false },
-            title = { Text("গ্রাহক খাতা মুছে ফেলতে চান?") },
+            title = { Text("গ্রাহক খাতা মুছে ফেলতে চান?", fontWeight = FontWeight.Bold) },
             text = { Text("এই গ্রাহকের নাম এবং সমস্ত পূর্ববর্তী লেনদেনের হিসাব স্থায়ীভাবে মুছে ফেলা হবে।") },
             confirmButton = {
                 Button(
@@ -364,7 +410,7 @@ fun CustomerDetailScreen(
     txToDelete?.let { tx ->
         AlertDialog(
             onDismissRequest = { txToDelete = null },
-            title = { Text("লেনদেনটি মুছে ফেলতে চান?") },
+            title = { Text("লেনদেনটি মুছে ফেলতে চান?", fontWeight = FontWeight.Bold) },
             text = { Text("টাকা: ${Formatters.formatTaka(tx.amount)}\nবিবরণ: ${tx.note.ifBlank { "বিবরণ নেই" }}") },
             confirmButton = {
                 Button(
@@ -390,125 +436,160 @@ fun CustomerDetailScreen(
 fun CustomerLedgerHeader(
     item: CustomerWithBalance,
     onSmsClick: () -> Unit,
+    onWhatsAppClick: () -> Unit,
     onShareStatement: () -> Unit
 ) {
     val customer = item.customer
-    val balanceColor = when {
-        item.isReceivable -> KhataReceivableGreen
-        item.isPayable -> KhataPayableRed
-        else -> KhataSettledGray
-    }
-    val balanceBg = when {
-        item.isReceivable -> KhataReceivableBg
-        item.isPayable -> KhataPayableBg
-        else -> KhataSettledBg
+    val initial = customer.name.firstOrNull()?.toString() ?: "ক"
+
+    val (balanceColor, balanceBg, balanceBorder) = when {
+        item.isReceivable -> Triple(KhataReceivableGreen, KhataReceivableBg, KhataReceivableBorder)
+        item.isPayable -> Triple(KhataPayableRed, KhataPayableBg, KhataPayableBorder)
+        else -> Triple(KhataSettledGray, KhataSettledBg, KhataSettledBorder)
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
+            .padding(16.dp)
+            .shadow(3.dp, RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Profile Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(balanceColor.copy(alpha = 0.12f))
+                        .border(1.5.dp, balanceColor.copy(alpha = 0.35f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = initial,
+                        color = balanceColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = customer.name,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = KhataTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (customer.phone.isNotBlank()) {
+                        Text(
+                            text = customer.phone,
+                            fontSize = 12.sp,
+                            color = KhataTextSecondary
+                        )
+                    }
+                    if (customer.address.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = KhataTextSecondary
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = customer.address,
+                                fontSize = 11.sp,
+                                color = KhataTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             // Balance Banner
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(balanceBg)
-                    .padding(vertical = 16.dp, horizontal = 12.dp),
+                    .border(1.dp, balanceBorder, RoundedCornerShape(16.dp))
+                    .padding(vertical = 14.dp, horizontal = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = item.statusTextBangla,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = balanceColor
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = Formatters.formatTaka(item.displayAmount),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = balanceColor
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Contact & Address Info
-            if (customer.phone.isNotBlank() || customer.address.isNotBlank()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        if (customer.phone.isNotBlank()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Phone,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.outline
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = customer.phone,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                        if (customer.address.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.outline
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = customer.address,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-
-            // Quick reminder and share actions
+            // Action Chips: WhatsApp, SMS, Statement
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // WhatsApp Reminder
+                OutlinedButton(
+                    onClick = onWhatsAppClick,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = WhatsAppGreen),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, WhatsAppGreen.copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Chat,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = WhatsAppGreen
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("হোয়াটসঅ্যাপ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = WhatsAppGreen)
+                }
+
                 // SMS Reminder
                 OutlinedButton(
                     onClick = onSmsClick,
                     modifier = Modifier
                         .weight(1f)
                         .testTag("detail_sms_reminder_button"),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = KhataPrimary),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, KhataPrimary.copy(alpha = 0.5f))
                 ) {
                     Icon(
-                        Icons.Default.Message,
+                        imageVector = Icons.Default.Message,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(15.dp),
                         tint = KhataPrimary
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("এসএমএস তাগাদা", fontSize = 12.sp, color = KhataPrimary)
+                    Text("এসএমএস", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = KhataPrimary)
                 }
 
                 // Share Statement
@@ -517,16 +598,17 @@ fun CustomerLedgerHeader(
                     modifier = Modifier
                         .weight(1f)
                         .testTag("detail_share_statement_button"),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder)
                 ) {
                     Icon(
-                        Icons.Default.Share,
+                        imageVector = Icons.Default.Share,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurface
+                        modifier = Modifier.size(15.dp),
+                        tint = KhataTextPrimary
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("বিবরণী শেয়ার", fontSize = 12.sp)
+                    Text("বিবরণী", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = KhataTextPrimary)
                 }
             }
         }
@@ -548,29 +630,31 @@ fun TransactionItemCard(
     }
 
     val typeColor = if (isCredit) KhataPayableRed else KhataReceivableGreen
+    val icon = if (isCredit) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Type indicator icon
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(typeColor.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isCredit) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                    imageVector = icon,
                     contentDescription = null,
                     tint = typeColor,
                     modifier = Modifier.size(18.dp)
@@ -589,26 +673,31 @@ fun TransactionItemCard(
                 )
 
                 if (transaction.note.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = transaction.note,
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium,
+                        color = KhataTextPrimary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                Spacer(modifier = Modifier.height(2.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = Formatters.formatDateTime(transaction.date),
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.outline
+                        color = KhataTextSecondary
                     )
                     if (transaction.billNumber.isNotBlank()) {
                         Text(
-                            text = " • মেমো: ${transaction.billNumber}",
+                            text = " • ভাউচার: ${transaction.billNumber}",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.outline
+                            fontWeight = FontWeight.SemiBold,
+                            color = KhataTextSecondary
                         )
                     }
                 }
@@ -618,19 +707,21 @@ fun TransactionItemCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "${if (isCredit) "+" else "-"} ${Formatters.formatTaka(transaction.amount)}",
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     fontSize = 15.sp,
                     color = typeColor
                 )
+
+                Spacer(modifier = Modifier.width(4.dp))
 
                 IconButton(
                     onClick = onDeleteClick,
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        Icons.Default.Delete,
+                        imageVector = Icons.Default.Delete,
                         contentDescription = "Delete entry",
-                        tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                        tint = KhataTextSecondary.copy(alpha = 0.6f),
                         modifier = Modifier.size(16.dp)
                     )
                 }

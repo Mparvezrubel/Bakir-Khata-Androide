@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,15 +27,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AddBusiness
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -46,7 +55,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -69,8 +82,14 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.example.data.preferences.ShopPreferences
 import com.example.ui.BakirKhataViewModel
+import com.example.ui.theme.KhataCardBorder
 import com.example.ui.theme.KhataPrimary
+import com.example.ui.theme.KhataReceivableBg
+import com.example.ui.theme.KhataReceivableBorder
 import com.example.ui.theme.KhataReceivableGreen
+import com.example.ui.theme.KhataTextPrimary
+import com.example.ui.theme.KhataTextSecondary
+import com.example.util.AutoBackupScheduler
 import com.example.util.Formatters
 import com.example.util.ReminderHelper
 import kotlinx.coroutines.launch
@@ -94,7 +113,14 @@ fun BackupSettingsScreen(
     var ownerPhone by remember { mutableStateOf(viewModel.shopPrefs.ownerPhone) }
     var smsTemplate by remember { mutableStateOf(viewModel.shopPrefs.smsReminderTemplate) }
 
+    var googleAccountEmail by remember { mutableStateOf(viewModel.shopPrefs.googleAccountEmail) }
+    var isAutoBackupEnabled by remember { mutableStateOf(viewModel.shopPrefs.isAutoBackupEnabled) }
+    var isBackupWifiOnly by remember { mutableStateOf(viewModel.shopPrefs.isBackupWifiOnly) }
     var lastBackupTime by remember { mutableStateOf(viewModel.shopPrefs.lastBackupTimestamp) }
+    var lastAutoBackupTime by remember { mutableStateOf(viewModel.shopPrefs.lastAutoBackupTimestamp) }
+
+    var showConnectGmailDialog by remember { mutableStateOf(false) }
+    var tempGmailInput by remember { mutableStateOf("") }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var pendingRestoreJson by remember { mutableStateOf<String?>(null) }
     var showResetDataConfirm by remember { mutableStateOf(false) }
@@ -149,9 +175,10 @@ fun BackupSettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "ড্রাইভ ব্যাকআপ ও সেটিংস",
+                        text = "গুগল ড্রাইভ ও ব্যাকআপ সেটিংস",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = 17.sp,
+                        color = Color.White
                     )
                 },
                 navigationIcon = {
@@ -170,6 +197,16 @@ fun BackupSettingsScreen(
                             viewModel.shopPrefs.ownerName = ownerName
                             viewModel.shopPrefs.ownerPhone = ownerPhone
                             viewModel.shopPrefs.smsReminderTemplate = smsTemplate
+                            viewModel.shopPrefs.googleAccountEmail = googleAccountEmail
+                            viewModel.shopPrefs.isAutoBackupEnabled = isAutoBackupEnabled
+                            viewModel.shopPrefs.isBackupWifiOnly = isBackupWifiOnly
+
+                            if (isAutoBackupEnabled) {
+                                AutoBackupScheduler.scheduleDailyBackup(context, wifiOnly = isBackupWifiOnly)
+                            } else {
+                                AutoBackupScheduler.cancelDailyBackup(context)
+                            }
+
                             Toast.makeText(context, "সেটিংস সংরক্ষণ করা হয়েছে", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier.testTag("save_settings_button")
@@ -193,11 +230,372 @@ fun BackupSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Backup & Drive Section
+            // 1. Google Drive & Gmail Account Connection Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFE8F0FE)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Mail,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1A73E8),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "জিমেইল ও ড্রাইভ একাউন্ট",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = KhataTextPrimary
+                                )
+                                Text(
+                                    text = "Google Drive Cloud Sync",
+                                    fontSize = 11.sp,
+                                    color = KhataTextSecondary
+                                )
+                            }
+                        }
+
+                        // Connection Status Pill
+                        val isConnected = googleAccountEmail.isNotBlank()
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isConnected) KhataReceivableBg else MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                0.5.dp,
+                                if (isConnected) KhataReceivableBorder else KhataCardBorder
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isConnected) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = KhataReceivableGreen,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = if (isConnected) "সংযুক্ত" else "সংযুক্ত নয়",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isConnected) KhataReceivableGreen else KhataTextSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (googleAccountEmail.isNotBlank()) {
+                        // Connected State Display
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = KhataReceivableBg.copy(alpha = 0.6f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, KhataReceivableBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AccountCircle,
+                                        contentDescription = null,
+                                        tint = KhataReceivableGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = googleAccountEmail,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = KhataTextPrimary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "📁 গুগল ড্রাইভ ফোল্ডার: /BakirKhata-Backup",
+                                    fontSize = 11.sp,
+                                    color = KhataTextSecondary
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    tempGmailInput = googleAccountEmail
+                                    showConnectGmailDialog = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("পরিবর্তন করুন", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    googleAccountEmail = ""
+                                    viewModel.shopPrefs.googleAccountEmail = ""
+                                    Toast.makeText(context, "জিমেইল একাউন্ট সংযোগ বিচ্ছিন্ন করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("ডিসকানেক্ট", fontSize = 12.sp)
+                            }
+                        }
+                    } else {
+                        // Not connected state
+                        Text(
+                            text = "আপনার জিমেইল একাউন্ট সংযুক্ত করুন। প্রতিদিনের ব্যাকআপ স্বয়ংক্রিয়ভাবে আপনার গুগল ড্রাইভ ক্লাউডে জমা হয়ে যাবে।",
+                            fontSize = 12.sp,
+                            color = KhataTextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                tempGmailInput = "itsmparvezrubel@gmail.com"
+                                showConnectGmailDialog = true
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("connect_gmail_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Mail, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("জিমেইল (Gmail) সংযুক্ত করুন", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // 2. Daily Automatic Backup Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(KhataPrimary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = null,
+                                    tint = KhataPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "প্রতিদিন স্বয়ংক্রিয় ব্যাকআপ",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = KhataTextPrimary
+                                )
+                                Text(
+                                    text = "প্রতি ২৪ ঘণ্টায় স্বয়ংক্রিয় ব্যাকআপ",
+                                    fontSize = 11.sp,
+                                    color = KhataTextSecondary
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isAutoBackupEnabled,
+                            onCheckedChange = { checked ->
+                                isAutoBackupEnabled = checked
+                                viewModel.shopPrefs.isAutoBackupEnabled = checked
+                                if (checked) {
+                                    AutoBackupScheduler.scheduleDailyBackup(context, wifiOnly = isBackupWifiOnly)
+                                    Toast.makeText(context, "দৈনিক স্বয়ংক্রিয় ব্যাকআপ চালু হয়েছে", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    AutoBackupScheduler.cancelDailyBackup(context)
+                                    Toast.makeText(context, "স্বয়ংক্রিয় ব্যাকআপ বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = KhataPrimary
+                            )
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isAutoBackupEnabled) {
+                        Column {
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Wi-Fi only toggle
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Wifi,
+                                            contentDescription = null,
+                                            tint = KhataPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = "শুধু ওয়াই-ফাই (Wi-Fi) থাকলে ব্যাকআপ",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = KhataTextPrimary
+                                            )
+                                            Text(
+                                                text = "মোবাইল ডেটা খরচ বাঁচাবে",
+                                                fontSize = 10.sp,
+                                                color = KhataTextSecondary
+                                            )
+                                        }
+                                    }
+
+                                    Switch(
+                                        checked = isBackupWifiOnly,
+                                        onCheckedChange = {
+                                            isBackupWifiOnly = it
+                                            viewModel.shopPrefs.isBackupWifiOnly = it
+                                            AutoBackupScheduler.scheduleDailyBackup(context, wifiOnly = it)
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = KhataPrimary
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Auto Backup Status Box
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = KhataPrimary.copy(alpha = 0.06f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, KhataPrimary.copy(alpha = 0.15f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudDone,
+                                            contentDescription = null,
+                                            tint = KhataPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "স্বয়ংক্রিয় ব্যাকআপ স্থিতি:",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = KhataPrimary
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    val lastTimeText = if (lastAutoBackupTime > 0) {
+                                        Formatters.formatDateTime(lastAutoBackupTime)
+                                    } else {
+                                        "আজ রাতে প্রথম ব্যাকআপ কার্যকর হবে"
+                                    }
+
+                                    Text(
+                                        text = "• সর্বশেষ ব্যাকআপ: $lastTimeText",
+                                        fontSize = 11.sp,
+                                        color = KhataTextPrimary
+                                    )
+                                    Text(
+                                        text = "• সিডিউল: প্রতিদিন মধ্যরাত ১২:০০ টা",
+                                        fontSize = 11.sp,
+                                        color = KhataTextSecondary
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Immediate Test Auto Backup Button
+                            OutlinedButton(
+                                onClick = {
+                                    AutoBackupScheduler.triggerImmediateBackup(context)
+                                    lastAutoBackupTime = System.currentTimeMillis()
+                                    Toast.makeText(context, "স্বয়ংক্রিয় ব্যাকআপ সফলভাবে সম্পন্ন হয়েছে!", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, KhataPrimary.copy(alpha = 0.4f))
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp), tint = KhataPrimary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("এখনই অটো-ব্যাকআপ পরীক্ষা করুন", fontSize = 12.sp, color = KhataPrimary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Manual Backup & Restore Actions Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -210,7 +608,7 @@ fun BackupSettingsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.CloudUpload,
+                                imageVector = Icons.Default.CloudUpload,
                                 contentDescription = null,
                                 tint = KhataPrimary,
                                 modifier = Modifier.size(20.dp)
@@ -219,30 +617,23 @@ fun BackupSettingsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "গুগল ড্রাইভ ও অফলাইন ব্যাকআপ",
+                                text = "ম্যানুয়াল ব্যাকআপ ও রিস্টোর",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp,
+                                color = KhataTextPrimary
                             )
                             val backupText = if (lastBackupTime > 0) {
-                                "সর্বশেষ ব্যাকআপ: ${Formatters.formatDateTime(lastBackupTime)}"
+                                "সর্বশেষ ম্যানুয়াল ব্যাকআপ: ${Formatters.formatDateTime(lastBackupTime)}"
                             } else {
-                                "এখনো কোনো ব্যাকআপ নেওয়া হয়নি"
+                                "এখনো কোনো ম্যানুয়াল ব্যাকআপ নেওয়া হয়নি"
                             }
                             Text(
                                 text = backupText,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.outline
+                                fontSize = 11.sp,
+                                color = KhataTextSecondary
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = "আপনার সমস্ত কাস্টমার ও বাকি লেনদেনের ডাটা নিরাপদে গুগল ড্রাইভ অথবা মোবাইলের স্টোরেজে সংরক্ষণ করুন। নতুন ফোনে খুব সহজেই তা রিস্টোর করা যাবে।",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -257,11 +648,11 @@ fun BackupSettingsScreen(
                             .fillMaxWidth()
                             .testTag("backup_to_drive_button"),
                         colors = ButtonDefaults.buttonColors(containerColor = KhataPrimary),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("গুগল ড্রাইভ / মেমরিতে ব্যাকআপ রাখুন")
+                        Text("গুগল ড্রাইভে ফাইল সংরক্ষণ করুন", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -276,11 +667,12 @@ fun BackupSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("share_backup_button"),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder)
                     ) {
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("গুগল ড্রাইভ অ্যাপে ফাইল শেয়ার করুন")
+                        Text("গুগল ড্রাইভ অ্যাপে ফাইল শেয়ার করুন", fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -293,20 +685,22 @@ fun BackupSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("restore_backup_button"),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder)
                     ) {
                         Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ড্রাইভ / ফাইল থেকে রিস্টোর করুন")
+                        Text("ড্রাইভ / মেমরি থেকে রিস্টোর করুন", fontSize = 13.sp)
                     }
                 }
             }
 
-            // SMS Reminder Customization Card
+            // 4. SMS Reminder Customization Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -330,12 +724,13 @@ fun BackupSettingsScreen(
                             Text(
                                 text = "এসএমএস রিমাইন্ডার টেমপ্লেট",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp,
+                                color = KhataTextPrimary
                             )
                             Text(
                                 text = "ট্যাগ: {NAME} = নাম, {AMOUNT} = টাকা, {SHOP} = দোকান",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.outline
+                                color = KhataTextSecondary
                             )
                         }
                     }
@@ -349,7 +744,11 @@ fun BackupSettingsScreen(
                             .fillMaxWidth()
                             .height(110.dp)
                             .testTag("sms_template_input"),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = KhataCardBorder,
+                            focusedBorderColor = KhataPrimary
+                        )
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -360,7 +759,7 @@ fun BackupSettingsScreen(
                             .fillMaxWidth()
                             .background(
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                RoundedCornerShape(8.dp)
+                                RoundedCornerShape(10.dp)
                             )
                             .padding(10.dp)
                     ) {
@@ -369,7 +768,7 @@ fun BackupSettingsScreen(
                                 text = "প্রিভিউ (গ্রাহক যা দেখতে পাবেন):",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.outline
+                                color = KhataTextSecondary
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             val previewMsg = ReminderHelper.composeReminderMessage(
@@ -381,7 +780,7 @@ fun BackupSettingsScreen(
                             Text(
                                 text = previewMsg,
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = KhataTextPrimary
                             )
                         }
                     }
@@ -403,11 +802,12 @@ fun BackupSettingsScreen(
                 }
             }
 
-            // Shop Profile Card
+            // 5. Shop Profile Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, KhataCardBorder),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -430,7 +830,8 @@ fun BackupSettingsScreen(
                         Text(
                             text = "দোকানের পরিচিতি ও প্রোফাইল",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            fontSize = 15.sp,
+                            color = KhataTextPrimary
                         )
                     }
 
@@ -442,6 +843,7 @@ fun BackupSettingsScreen(
                         label = { Text("দোকান / ব্যবসার নাম") },
                         placeholder = { Text("যেমন: মেসার্স ভাই ভাই স্টোর") },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("shop_name_input")
@@ -455,6 +857,7 @@ fun BackupSettingsScreen(
                         label = { Text("স্বত্বাধিকারী / আপনার নাম (ঐচ্ছিক)") },
                         placeholder = { Text("যেমন: হাজী আব্দুর রাজ্জাক") },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("owner_name_input")
@@ -468,6 +871,7 @@ fun BackupSettingsScreen(
                         label = { Text("দোকানের মোবাইল নম্বর (ঐচ্ছিক)") },
                         placeholder = { Text("যেমন: 01712345678") },
                         singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("owner_phone_input")
@@ -487,17 +891,17 @@ fun BackupSettingsScreen(
                             .fillMaxWidth()
                             .testTag("save_profile_button"),
                         colors = ButtonDefaults.buttonColors(containerColor = KhataPrimary),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("সংরক্ষণ করুন")
+                        Text("প্রোফাইল সংরক্ষণ করুন", fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            // Safety Guarantee & Reset Card
+            // 6. Safety Guarantee & Reset Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -518,9 +922,9 @@ fun BackupSettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "আপনার বাকি হিসাবের সকল তথ্য আপনার মোবাইল ফোনেই সংরক্ষিত থাকে। ইন্টারনেট সংযোগ ছাড়াই এটি সম্পূর্ণ কাজ করে। ড্রাইভ ব্যাকআপ আপনার ডেটাকে নিরাপদ রাখে।",
+                        text = "আপনার বাকি হিসাবের সকল তথ্য আপনার মোবাইল ফোনেই সংরক্ষিত থাকে। ইন্টারনেট সংযোগ ছাড়াই এটি সম্পূর্ণ কাজ করে। গুগল ড্রাইভ ব্যাকআপ আপনার ব্যবসাকে ডেটা হারানোর ঝুঁকি থেকে চিরতরে মুক্ত রাখে।",
                         fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.outline
+                        color = KhataTextSecondary
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -530,7 +934,7 @@ fun BackupSettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("reset_demo_button"),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -541,6 +945,86 @@ fun BackupSettingsScreen(
         }
     }
 
+    // Connect Gmail Dialog
+    if (showConnectGmailDialog) {
+        AlertDialog(
+            onDismissRequest = { showConnectGmailDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Mail, contentDescription = null, tint = Color(0xFF1A73E8))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("জিমেইল একাউন্ট সংযুক্ত করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "আপনার জিমেইল একাউন্ট দিন। ব্যাকআপ ফাইল এই একাউন্টের গুগল ড্রাইভে স্বয়ংক্রিয়ভাবে জমা হবে।",
+                        fontSize = 12.sp,
+                        color = KhataTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = tempGmailInput,
+                        onValueChange = { tempGmailInput = it },
+                        label = { Text("Gmail ঠিকানা") },
+                        placeholder = { Text("example@gmail.com") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Suggestion Chip for current user email
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFE8F0FE),
+                        modifier = Modifier
+                            .clickable {
+                                tempGmailInput = "itsmparvezrubel@gmail.com"
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "💡 ব্যবহার করুন: itsmparvezrubel@gmail.com",
+                                fontSize = 11.sp,
+                                color = Color(0xFF1A73E8),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (tempGmailInput.isNotBlank() && tempGmailInput.contains("@")) {
+                            googleAccountEmail = tempGmailInput.trim()
+                            viewModel.shopPrefs.googleAccountEmail = googleAccountEmail
+                            showConnectGmailDialog = false
+                            Toast.makeText(context, "জিমেইল সফলভাবে সংযুক্ত হয়েছে!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "সঠিক জিমেইল ঠিকানা দিন", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8))
+                ) {
+                    Text("কানেক্ট করুন")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConnectGmailDialog = false }) {
+                    Text("বাতিল")
+                }
+            }
+        )
+    }
+
     // Confirmation for restore
     if (showRestoreConfirmDialog && pendingRestoreJson != null) {
         AlertDialog(
@@ -548,7 +1032,7 @@ fun BackupSettingsScreen(
                 showRestoreConfirmDialog = false
                 pendingRestoreJson = null
             },
-            title = { Text("ব্যাকআপ রিস্টোর নিশ্চিত করুন") },
+            title = { Text("ব্যাকআপ রিস্টোর নিশ্চিত করুন", fontWeight = FontWeight.Bold) },
             text = {
                 Text("রিস্টোর করলে বর্তমানের ডেটা প্রতিস্থাপিত হবে। আপনি কি নিশ্চিত যে আপনি ব্যাকআপ ফাইলটি রিস্টোর করতে চান?")
             },
@@ -588,7 +1072,7 @@ fun BackupSettingsScreen(
     if (showResetDataConfirm) {
         AlertDialog(
             onDismissRequest = { showResetDataConfirm = false },
-            title = { Text("ডেমো ডেটা রিসেট করবেন?") },
+            title = { Text("ডেমো ডেটা রিসেট করবেন?", fontWeight = FontWeight.Bold) },
             text = { Text("ডেমো কাস্টমার ও বাকির হিসাবসমূহ পুনরায় লোড করা হবে।") },
             confirmButton = {
                 Button(
