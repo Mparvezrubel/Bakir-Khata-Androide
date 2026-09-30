@@ -24,9 +24,10 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # Setup Android SDK
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # Accept Android licenses on the pre-installed SDK runner
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || yes | sdkmanager --licenses || true
 
       # Setup Gradle with official action for optimized caching
       - name: Setup Gradle
