@@ -11,97 +11,76 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.data.database.AppDatabase
-import com.example.data.model.Customer
-import com.example.data.model.Transaction
+import com.example.data.model.KhataBackupData
 import com.example.data.preferences.ShopPreferences
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+/** Creates scheduled, on-device backup snapshots. */
 class AutoBackupWorker(
     appContext: Context,
     workerParams: WorkerParameters
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result {
-        return try {
-            val db = AppDatabase.getDatabase(applicationContext)
-            val prefs = ShopPreferences(applicationContext)
+    override suspend fun doWork(): Result = try {
+        val prefs = ShopPreferences(applicationContext)
+        if (!prefs.isAutoBackupEnabled) return Result.success()
 
-            if (!prefs.isAutoBackupEnabled) {
-                return Result.success()
-            }
+        val dao = AppDatabase.getDatabase(applicationContext).khataDao()
+        val backupJson = KhataBackupData(
+            shopName = prefs.shopName,
+            customers = dao.getAllCustomersDirect(),
+            transactions = dao.getAllTransactionsDirect()
+        ).toJsonString()
 
-            val customers: List<Customer> = db.khataDao().getAllCustomersDirect()
-            val transactions: List<Transaction> = db.khataDao().getAllTransactionsDirect()
-
-            val rootJson = JSONObject().apply {
-                put("version", 1)
-                put("exportTimestamp", System.currentTimeMillis())
-                put("shopName", prefs.shopName)
-                put("ownerName", prefs.ownerName)
-                put("ownerPhone", prefs.ownerPhone)
-                put("googleAccount", prefs.googleAccountEmail)
-                put("backupType", "DAILY_AUTO_BACKUP")
-
-                val customersArray = JSONArray()
-                customers.forEach { c ->
-                    customersArray.put(JSONObject().apply {
-                        put("id", c.id)
-                        put("name", c.name)
-                        put("phone", c.phone)
-                        put("address", c.address)
-                        put("type", c.customerType.name)
-                        put("createdAt", c.createdAt)
-                        put("updatedAt", c.updatedAt)
-                    })
-                }
-                put("customers", customersArray)
-
-                val transactionsArray = JSONArray()
-                transactions.forEach { t ->
-                    transactionsArray.put(JSONObject().apply {
-                        put("id", t.id)
-                        put("customerId", t.customerId)
-                        put("amount", t.amount)
-                        put("type", t.type.name)
-                        put("note", t.note)
-                        put("billNumber", t.billNumber)
-                        put("date", t.date)
-                        put("dueDate", t.dueDate ?: JSONObject.NULL)
-                    })
-                }
-                put("transactions", transactionsArray)
-            }
-
-            // Save to auto-backup directory in app storage
-            val backupDir = File(applicationContext.filesDir, "auto_backups").apply {
-                if (!exists()) mkdirs()
-            }
-
-            // Primary auto-backup file
-            val backupFile = File(backupDir, "bakir_khata_drive_auto_backup.json")
-            backupFile.writeText(rootJson.toString(2), Charsets.UTF_8)
-
-            // Also keep rolling daily backup
-            val dateStr = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
-            val dailyFile = File(backupDir, "backup_$dateStr.json")
-            dailyFile.writeText(rootJson.toString(2), Charsets.UTF_8)
-
-            // Update preference timestamps
-            val now = System.currentTimeMillis()
-            prefs.lastAutoBackupTimestamp = now
-            prefs.lastBackupTimestamp = now
-
-            Result.success()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Result.retry()
+        val backupDir = File(applicationContext.filesDir, BACKUP_DIRECTORY)
+        if (!backupDir.exists() && !backupDir.mkdirs()) {
+            error("Could not create the backup directory")
         }
+
+        val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        writeAtomically(File(backupDir, PRIMARY_BACKUP), backupJson)
+        writeAtomically(File(backupDir, "backup_$date.json"), backupJson)
+        pruneOldDailyBackups(backupDir)
+
+        val completedAt = System.currentTimeMillis()
+        prefs.lastAutoBackupTimestamp = completedAt
+        prefs.lastBackupTimestamp = completedAt
+        Result.success()
+    } catch (error: Exception) {
+        error.printStackTrace()
+        Result.retry()
+    }
+
+    private fun writeAtomically(destination: File, content: String) {
+        val temporary = File(destination.parentFile, "${destination.name}.tmp")
+        temporary.writeText(content, Charsets.UTF_8)
+        if (destination.exists() && !destination.delete()) {
+            temporary.delete()
+            error("Could not replace the previous backup")
+        }
+        if (!temporary.renameTo(destination)) {
+            temporary.delete()
+            error("Could not finish writing the backup")
+        }
+    }
+
+    private fun pruneOldDailyBackups(directory: File) {
+        val cutoff = System.currentTimeMillis() - RETENTION_DAYS * DAY_MILLIS
+        directory.listFiles { file -> file.name.matches(DAILY_BACKUP_PATTERN) }
+            ?.filter { it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
+    }
+
+    companion object {
+        private const val BACKUP_DIRECTORY = "auto_backups"
+        private const val PRIMARY_BACKUP = "bakir_khata_drive_auto_backup.json"
+        private const val RETENTION_DAYS = 30
+        private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+        private val DAILY_BACKUP_PATTERN = Regex("backup_\\d{8}\\.json")
     }
 }
 
