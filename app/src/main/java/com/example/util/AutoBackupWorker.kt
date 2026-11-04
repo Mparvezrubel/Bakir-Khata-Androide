@@ -19,36 +19,35 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-/** Creates scheduled, on-device backup snapshots. */
-class AutoBackupWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : CoroutineWorker(appContext, workerParams) {
-
+/** Makes a local snapshot first, then syncs it to the folder selected by the user. */
+class AutoBackupWorker(appContext: Context, workerParams: WorkerParameters) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result = try {
         val prefs = ShopPreferences(applicationContext)
         if (!prefs.isAutoBackupEnabled) return Result.success()
-
-        val dao = AppDatabase.getDatabase(applicationContext).khataDao()
-        val backupJson = KhataBackupData(
-            shopName = prefs.shopName,
-            customers = dao.getAllCustomersDirect(),
-            transactions = dao.getAllTransactionsDirect()
-        ).toJsonString()
-
-        val backupDir = File(applicationContext.filesDir, BACKUP_DIRECTORY)
-        if (!backupDir.exists() && !backupDir.mkdirs()) {
-            error("Could not create the backup directory")
+        if (!DriveBackupStorage.hasFolder(applicationContext)) {
+            return Result.failure()
         }
 
-        val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-        writeAtomically(File(backupDir, PRIMARY_BACKUP), backupJson)
-        writeAtomically(File(backupDir, "backup_$date.json"), backupJson)
-        pruneOldDailyBackups(backupDir)
+        val dao = AppDatabase.getDatabase(applicationContext).khataDao()
+        val now = System.currentTimeMillis()
+        val json = KhataBackupData(
+            shopName = prefs.shopName,
+            customers = dao.getAllCustomersDirect(),
+            transactions = dao.getAllTransactionsDirect(),
+            exportedAt = now
+        ).toJsonString()
 
-        val completedAt = System.currentTimeMillis()
-        prefs.lastAutoBackupTimestamp = completedAt
-        prefs.lastBackupTimestamp = completedAt
+        val directory = File(applicationContext.filesDir, BACKUP_DIRECTORY)
+        if (!directory.exists() && !directory.mkdirs()) error("Could not create local backup directory")
+        val day = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(now))
+        writeAtomically(File(directory, PRIMARY_BACKUP), json)
+        writeAtomically(File(directory, "backup_$day.json"), json)
+
+        // SAF operations are synchronous; WorkManager runs this worker off the main thread.
+        DriveBackupStorage.writeBackup(applicationContext, json, now)
+        pruneOldBackups(directory, now)
+        prefs.lastAutoBackupTimestamp = now
+        prefs.lastBackupTimestamp = now
         Result.success()
     } catch (error: Exception) {
         error.printStackTrace()
@@ -60,16 +59,16 @@ class AutoBackupWorker(
         temporary.writeText(content, Charsets.UTF_8)
         if (destination.exists() && !destination.delete()) {
             temporary.delete()
-            error("Could not replace the previous backup")
+            error("Could not replace the previous local backup")
         }
         if (!temporary.renameTo(destination)) {
             temporary.delete()
-            error("Could not finish writing the backup")
+            error("Could not finalize the local backup")
         }
     }
 
-    private fun pruneOldDailyBackups(directory: File) {
-        val cutoff = System.currentTimeMillis() - RETENTION_DAYS * DAY_MILLIS
+    private fun pruneOldBackups(directory: File, now: Long) {
+        val cutoff = now - RETENTION_DAYS * DAY_MILLIS
         directory.listFiles { file -> file.name.matches(DAILY_BACKUP_PATTERN) }
             ?.filter { it.lastModified() < cutoff }
             ?.forEach { it.delete() }
@@ -92,34 +91,22 @@ object AutoBackupScheduler {
             .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
             .build()
-
-        val dailyWorkRequest = PeriodicWorkRequestBuilder<AutoBackupWorker>(
-            repeatInterval = 24,
-            repeatIntervalTimeUnit = TimeUnit.HOURS,
-            flexTimeInterval = 2,
-            flexTimeIntervalUnit = TimeUnit.HOURS
-        )
+        val request = PeriodicWorkRequestBuilder<AutoBackupWorker>(24, TimeUnit.HOURS, 2, TimeUnit.HOURS)
             .setConstraints(constraints)
             .addTag("bakir_khata_auto_backup")
             .build()
-
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
-            dailyWorkRequest
+            request
         )
     }
 
     fun triggerImmediateBackup(context: Context) {
-        val oneTimeWork = OneTimeWorkRequestBuilder<AutoBackupWorker>()
+        val request = OneTimeWorkRequestBuilder<AutoBackupWorker>()
             .addTag("bakir_khata_immediate_backup")
             .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "IMMEDIATE_AUTO_BACKUP",
-            ExistingWorkPolicy.REPLACE,
-            oneTimeWork
-        )
+        WorkManager.getInstance(context).enqueueUniqueWork("IMMEDIATE_AUTO_BACKUP", ExistingWorkPolicy.REPLACE, request)
     }
 
     fun cancelDailyBackup(context: Context) {

@@ -1,78 +1,80 @@
 package com.example.util
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
-import com.example.data.model.KhataBackupData
-import com.example.data.preferences.ShopPreferences
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-/** Accesses a user-selected Google Drive (or other SAF provider) folder without storing credentials. */
+/** Stores backups in a user-selected SAF folder (Google Drive or another document provider). */
 object DriveBackupStorage {
-    private const val BACKUP_FILE = "bakir_khata_drive_auto_backup.json"
+    private const val PREFS = "drive_backup_settings"
+    private const val FOLDER_URI = "backup_folder_uri"
+    private const val LATEST_FILE = "bakir_khata_drive_auto_backup.json"
     private const val MIME_TYPE = "application/json"
+    private const val GRANT_FLAGS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
     fun saveFolder(context: Context, uri: Uri) {
-        context.contentResolver.takePersistableUriPermission(
-            uri,
-            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        )
-        ShopPreferences(context).driveBackupFolderUri = uri.toString()
+        context.contentResolver.takePersistableUriPermission(uri, GRANT_FLAGS)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(FOLDER_URI, uri.toString()).apply()
     }
 
     fun clearFolder(context: Context) {
-        val prefs = ShopPreferences(context)
-        prefs.driveBackupFolderUri?.let { value ->
-            runCatching {
-                context.contentResolver.releasePersistableUriPermission(
-                    Uri.parse(value),
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.getString(FOLDER_URI, null)?.let { saved ->
+            runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(saved), GRANT_FLAGS) }
         }
-        prefs.driveBackupFolderUri = null
+        prefs.edit().remove(FOLDER_URI).apply()
     }
 
-    fun hasFolder(context: Context): Boolean = !ShopPreferences(context).driveBackupFolderUri.isNullOrBlank()
+    fun hasFolder(context: Context): Boolean = folderUri(context) != null
 
-    /** Writes the latest backup and dated snapshot to the selected provider folder. */
     fun writeBackup(context: Context, json: String, timestamp: Long = System.currentTimeMillis()) {
-        val tree = folderUri(context) ?: throw IOException("Choose a Google Drive backup folder first")
-        writeDocument(context, tree, BACKUP_FILE, json)
-        val date = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
-            .format(java.util.Date(timestamp))
+        val tree = folderUri(context) ?: throw IOException("Select a Google Drive folder in backup settings first")
+        writeDocument(context, tree, LATEST_FILE, json)
+        val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(timestamp))
         writeDocument(context, tree, "backup_$date.json", json)
     }
 
-    /** Returns the latest cloud snapshot, or null if no backup exists yet. */
     fun readLatestBackup(context: Context): String? {
         val tree = folderUri(context) ?: return null
         val parentId = DocumentsContract.getTreeDocumentId(tree)
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
-        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME
+        )
         context.contentResolver.query(children, projection, null, null, null)?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
             val nameColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
             while (cursor.moveToNext()) {
-                if (cursor.getString(nameColumn) == BACKUP_FILE) {
+                if (cursor.getString(nameColumn) == LATEST_FILE) {
                     val document = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(idColumn))
-                    return context.contentResolver.openInputStream(document)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                    return context.contentResolver.openInputStream(document)
+                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                 }
             }
         }
         return null
     }
 
-    private fun folderUri(context: Context): Uri? =
-        ShopPreferences(context).driveBackupFolderUri?.let(Uri::parse)
+    private fun folderUri(context: Context): Uri? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val value = prefs.getString(FOLDER_URI, null) ?: return null
+        return runCatching { Uri.parse(value) }.getOrNull()
+    }
 
     private fun writeDocument(context: Context, tree: Uri, name: String, content: String) {
         val resolver = context.contentResolver
         val parentId = DocumentsContract.getTreeDocumentId(tree)
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
-        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME
+        )
         var existing: Uri? = null
         resolver.query(children, projection, null, null, null)?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
@@ -85,24 +87,21 @@ object DriveBackupStorage {
             }
         }
 
-        val temp = DocumentsContract.createDocument(resolver, tree, MIME_TYPE, "$name.tmp")
-            ?: throw IOException("Could not create backup in the selected Drive folder")
+        val tempName = ".${name}.${System.currentTimeMillis()}.tmp"
+        val temporary = DocumentsContract.createDocument(resolver, tree, MIME_TYPE, tempName)
+            ?: throw IOException("Could not create a backup in the selected folder")
         try {
-            resolver.openOutputStream(temp, "wt")?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
-                ?: throw IOException("Could not open the Drive backup file")
+            resolver.openOutputStream(temporary, "wt")?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
+                ?: throw IOException("Could not write the backup to the selected folder")
             existing?.let { old ->
-                if (!DocumentsContract.deleteDocument(resolver, old)) throw IOException("Could not replace the previous Drive backup")
+                if (!DocumentsContract.deleteDocument(resolver, old)) throw IOException("Could not replace the previous backup")
             }
-            if (DocumentsContract.renameDocument(resolver, temp, name) == null) {
-                throw IOException("Could not finalize the Drive backup file")
+            if (DocumentsContract.renameDocument(resolver, temporary, name) == null) {
+                throw IOException("Could not finalize the Drive backup")
             }
         } catch (error: Exception) {
-            runCatching { DocumentsContract.deleteDocument(resolver, temp) }
+            runCatching { DocumentsContract.deleteDocument(resolver, temporary) }
             throw error
         }
     }
-
-    /** Validates the cloud file before it is allowed to replace local database contents. */
-    fun validatedBackup(context: Context): KhataBackupData? =
-        readLatestBackup(context)?.let(KhataBackupData::fromJsonString)
 }
