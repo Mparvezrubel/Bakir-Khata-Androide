@@ -19,14 +19,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-/** Makes a local snapshot first, then syncs it to the folder selected by the user. */
 class AutoBackupWorker(appContext: Context, workerParams: WorkerParameters) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result = try {
         val prefs = ShopPreferences(applicationContext)
         if (!prefs.isAutoBackupEnabled) return Result.success()
-        if (!DriveBackupStorage.hasFolder(applicationContext)) {
-            return Result.failure()
-        }
 
         val dao = AppDatabase.getDatabase(applicationContext).khataDao()
         val now = System.currentTimeMillis()
@@ -43,8 +39,10 @@ class AutoBackupWorker(appContext: Context, workerParams: WorkerParameters) : Co
         writeAtomically(File(directory, PRIMARY_BACKUP), json)
         writeAtomically(File(directory, "backup_$day.json"), json)
 
-        // SAF operations are synchronous; WorkManager runs this worker off the main thread.
-        DriveBackupStorage.writeBackup(applicationContext, json, now)
+        // Keep a local backup even before the user grants Drive-folder access.
+        if (DriveBackupStorage.hasFolder(applicationContext)) {
+            DriveBackupStorage.writeBackup(applicationContext, json, now)
+        }
         pruneOldBackups(directory, now)
         prefs.lastAutoBackupTimestamp = now
         prefs.lastBackupTimestamp = now
@@ -95,21 +93,13 @@ object AutoBackupScheduler {
             .setConstraints(constraints)
             .addTag("bakir_khata_auto_backup")
             .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            UNIQUE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            request
-        )
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
     fun triggerImmediateBackup(context: Context) {
-        val request = OneTimeWorkRequestBuilder<AutoBackupWorker>()
-            .addTag("bakir_khata_immediate_backup")
-            .build()
+        val request = OneTimeWorkRequestBuilder<AutoBackupWorker>().addTag("bakir_khata_immediate_backup").build()
         WorkManager.getInstance(context).enqueueUniqueWork("IMMEDIATE_AUTO_BACKUP", ExistingWorkPolicy.REPLACE, request)
     }
 
-    fun cancelDailyBackup(context: Context) {
-        WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME)
-    }
+    fun cancelDailyBackup(context: Context) { WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME) }
 }
