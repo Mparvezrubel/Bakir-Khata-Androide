@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** Dashboard filters used by the customer list. */
 enum class FilterType(val titleBangla: String) {
     ALL("সব গ্রাহক"),
     RECEIVABLE("পাবো"),
@@ -44,15 +45,12 @@ class BakirKhataViewModel(application: Application) : AndroidViewModel(applicati
     val shopPrefs = ShopPreferences(application)
 
     val metrics: StateFlow<DashboardMetrics> = repository.dashboardMetrics.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DashboardMetrics()
+        viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardMetrics()
     )
     val rawCustomers: StateFlow<List<CustomerWithBalance>> = repository.customersWithBalances.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
+        viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
     )
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
     private val _selectedFilter = MutableStateFlow(FilterType.ALL)
@@ -83,8 +81,11 @@ class BakirKhataViewModel(application: Application) : AndroidViewModel(applicati
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Restore only on an empty installation. Never silently replace a user's existing ledger.
-        viewModelScope.launch { restoreDriveBackupIfLocalDatabaseEmpty() }
+        // Do not seed demo rows on a fresh install: that would make an empty-ledger cloud restore unsafe.
+        // Demo data remains available through the explicit demo-data action.
+        if (DriveBackupStorage.hasFolder(application)) {
+            viewModelScope.launch { restoreDriveBackupIfLocalDatabaseEmpty() }
+        }
     }
 
     fun onSearchQueryChange(query: String) { _searchQuery.value = query }
@@ -121,12 +122,13 @@ class BakirKhataViewModel(application: Application) : AndroidViewModel(applicati
     suspend fun getBackupJson(): String = repository.exportToJson(shopPrefs.shopName)
     fun markBackupCompleted() { shopPrefs.lastBackupTimestamp = System.currentTimeMillis() }
 
-    /** Called at launch and after folder selection; restores only if the local ledger is empty. */
+    /** Auto-restore is deliberately limited to an empty local ledger; never overwrites existing customer data. */
     suspend fun restoreDriveBackupIfLocalDatabaseEmpty(): Boolean = restoreMutex.withLock {
         withContext(Dispatchers.IO) {
-            if (database.khataDao().getAllCustomersDirect().isNotEmpty()) return@withContext false
-            val json = DriveBackupStorage.readLatestBackup(getApplication())
-                ?.takeIf { it.isNotBlank() } ?: return@withContext false
+            val dao = database.khataDao()
+            if (dao.getAllCustomersDirect().isNotEmpty()) return@withContext false
+            val json = DriveBackupStorage.readLatestBackup(getApplication())?.takeIf(String::isNotBlank)
+                ?: return@withContext false
             val result = repository.restoreFromJson(json)
             if (result.isSuccess) {
                 markBackupCompleted()

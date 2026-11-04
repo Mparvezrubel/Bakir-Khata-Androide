@@ -20,38 +20,52 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class AutoBackupWorker(appContext: Context, workerParams: WorkerParameters) : CoroutineWorker(appContext, workerParams) {
-    override suspend fun doWork(): Result {
-        return try {
-            val prefs = ShopPreferences(applicationContext)
-            if (!prefs.isAutoBackupEnabled) return Result.success()
+    override suspend fun doWork(): Result = try {
+        val prefs = ShopPreferences(applicationContext)
+        if (!prefs.isAutoBackupEnabled) return Result.success()
 
-            val dao = AppDatabase.getDatabase(applicationContext).khataDao()
-            val now = System.currentTimeMillis()
-            val json = KhataBackupData(
-                shopName = prefs.shopName,
-                customers = dao.getAllCustomersDirect(),
-                transactions = dao.getAllTransactionsDirect(),
-                exportedAt = now
-            ).toJsonString()
+        val dao = AppDatabase.getDatabase(applicationContext).khataDao()
+        var customers = dao.getAllCustomersDirect()
+        var transactions = dao.getAllTransactionsDirect()
 
-            val directory = File(applicationContext.filesDir, BACKUP_DIRECTORY)
-            if (!directory.exists() && !directory.mkdirs()) error("Could not create local backup directory")
-            val day = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(now))
-            writeAtomically(File(directory, PRIMARY_BACKUP), json)
-            writeAtomically(File(directory, "backup_$day.json"), json)
-
-            // Keep a local backup even before the user grants Drive-folder access.
-            if (DriveBackupStorage.hasFolder(applicationContext)) {
-                DriveBackupStorage.writeBackup(applicationContext, json, now)
+        // Prevent a just-installed/empty app from overwriting an existing cloud backup.
+        if (customers.isEmpty() && DriveBackupStorage.hasFolder(applicationContext)) {
+            val cloudJson = DriveBackupStorage.readLatestBackup(applicationContext)
+            if (!cloudJson.isNullOrBlank()) {
+                val cloudBackup = KhataBackupData.fromJsonString(cloudJson)
+                if (cloudBackup.customers.isNotEmpty()) {
+                    dao.restoreDatabase(cloudBackup.customers, cloudBackup.transactions)
+                    customers = dao.getAllCustomersDirect()
+                    transactions = dao.getAllTransactionsDirect()
+                }
             }
-            pruneOldBackups(directory, now)
-            prefs.lastAutoBackupTimestamp = now
-            prefs.lastBackupTimestamp = now
-            Result.success()
-        } catch (error: Exception) {
-            error.printStackTrace()
-            Result.retry()
         }
+        if (customers.isEmpty()) return Result.success()
+
+        val now = System.currentTimeMillis()
+        val json = KhataBackupData(
+            shopName = prefs.shopName,
+            customers = customers,
+            transactions = transactions,
+            exportedAt = now
+        ).toJsonString()
+        val directory = File(applicationContext.filesDir, BACKUP_DIRECTORY)
+        if (!directory.exists() && !directory.mkdirs()) error("Could not create local backup directory")
+        val day = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date(now))
+        writeAtomically(File(directory, PRIMARY_BACKUP), json)
+        writeAtomically(File(directory, "backup_$day.json"), json)
+
+        // A selected SAF folder is the user's explicit grant for Drive/document-provider sync.
+        if (DriveBackupStorage.hasFolder(applicationContext)) {
+            DriveBackupStorage.writeBackup(applicationContext, json, now)
+        }
+        pruneOldBackups(directory, now)
+        prefs.lastAutoBackupTimestamp = now
+        prefs.lastBackupTimestamp = now
+        Result.success()
+    } catch (error: Exception) {
+        error.printStackTrace()
+        Result.retry()
     }
 
     private fun writeAtomically(destination: File, content: String) {
